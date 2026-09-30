@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Physics Cyber Lab</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&display=swap">
+<link rel="stylesheet" href="css/cyberpunk.css">
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script>Auth.require();</script>
+<script type="module" src="https://unpkg.com/@wokwi/elements/dist/wokwi-elements.bundle.js"></script>
+</head>
+<body>
+<header id="topbar">
+  <h1>⚡ PHYSICS<b>CYBER</b>LAB</h1>
+  <input id="name" value="Mi circuito" title="Nombre del proyecto">
+  <button id="btnRun" class="neon green">▶ INICIAR SIMULACIÓN</button>
+  <button id="btnStop" class="neon orange" disabled>⏹ DETENER SIMULACIÓN</button>
+  <button id="btnSave" class="neon cyan">💾 GUARDAR PROYECTO</button>
+  <select id="loadSel"><option value="">📂 Cargar circuito…</option></select>
+  <button id="btnDel" class="neon red" title="Eliminar el proyecto cargado">🗑</button>
+  <button id="btnCode" class="neon purple">{ } CÓDIGO</button>
+  <span class="spacer"></span>
+  <span id="userbox"></span>
+  <button id="btnOut" class="neon orange">SALIR</button>
+</header>
+<aside id="sidebar"></aside>
+<main id="canvas">
+  <div id="world"><svg id="wires"></svg></div>
+  <div id="wirebar" class="glass"></div>
+  <div id="selbar" class="glass" hidden>
+    <button id="bRot" title="Rotar 90°">⟳</button><button id="bProps" title="Propiedades">⚙</button><button id="bDel" title="Eliminar">🗑</button>
+  </div>
+  <div id="status"></div>
+</main>
+<section id="editor" class="docked">
+  <div id="edHead"><span>sketch.ino</span><span>
+    <button data-m="dock" title="Anclar">⇥</button><button data-m="float" title="Flotante">❐</button><button data-m="min" title="Minimizar">—</button></span></div>
+  <textarea id="code" spellcheck="false"></textarea>
+</section>
+<button id="edFab" class="neon purple" hidden>{ } Editor</button>
+<script src="js/canvas.js"></script>
+<script src="js/wiring.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

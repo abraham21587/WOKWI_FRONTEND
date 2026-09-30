@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Physics Cyber Lab — Acceso</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&display=swap">
+<link rel="stylesheet" href="css/cyberpunk.css">
+</head>
+<body class="auth-page">
+<div class="auth-card glass">
+  <h1>⚡ PHYSICS<b>CYBER</b>LAB</h1>
+  <p class="sub">Laboratorio virtual de electrónica</p>
+  <div class="tabs">
+    <button id="tLogin" class="on" type="button">Iniciar sesión</button>
+    <button id="tReg" type="button">Crear cuenta</button>
+  </div>
+  <form id="f">
+    <input id="name" placeholder="Nombre" maxlength="50" autocomplete="name" hidden>
+    <input id="email" type="email" placeholder="Correo" required maxlength="100" autocomplete="email">
+    <input id="pass" type="password" placeholder="Contraseña (mínimo 8 caracteres)" required minlength="8" maxlength="72" autocomplete="current-password">
+    <button id="go" class="neon cyan" type="submit">ENTRAR</button>
+    <p id="msg"></p>
+  </form>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  if (Auth.token()) location.replace('index.html');
+
+  const $ = (s) => document.querySelector(s);
+  let mode = 'login';
+
+  function setMode(m) {
+    mode = m;
+    $('#tLogin').classList.toggle('on', m === 'login');
+    $('#tReg').classList.toggle('on', m === 'register');
+    $('#name').hidden = m === 'login';
+    $('#name').required = m === 'register';
+    $('#go').textContent = m === 'login' ? 'ENTRAR' : 'CREAR CUENTA';
+    $('#pass').autocomplete = m === 'login' ? 'current-password' : 'new-password';
+    $('#msg').textContent = '';
+  }
+  $('#tLogin').onclick = () => setMode('login');
+  $('#tReg').onclick = () => setMode('register');
+
+  $('#f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = $('#msg'), btn = $('#go');
+    msg.className = ''; msg.textContent = 'Conectando… (si el servidor estaba dormido puede tardar hasta 1 minuto)';
+    btn.disabled = true;
+    try {
+      const body = { email: $('#email').value, password: $('#pass').value };
+      if (mode === 'register') body.name = $('#name').value;
+      const data = await Auth.api('/api/auth/' + mode, { method: 'POST', body: JSON.stringify(body) });
+      Auth.save(data);
+      location.href = 'index.html';
+    } catch (err) {
+      msg.className = 'err';
+      msg.textContent = err.message === 'Failed to fetch' ? 'No se pudo conectar con el servidor' : err.message;
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
