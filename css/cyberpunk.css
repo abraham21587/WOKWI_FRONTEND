@@ -66,3 +66,8 @@ input:focus,select:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 8p
 #edHead button{background:none;border:0;color:var(--violet);cursor:pointer;font-size:14px}
 #code{flex:1;background:#11111b;color:var(--lime);border:0;padding:12px;font:13px 'Fira Code',monospace;resize:none;outline:none;tab-size:2}
 #edFab{position:fixed;right:16px;bottom:16px;z-index:15;background:var(--bg)}
+
+/* Lecturas de voltaje/corriente sobre cada componente */
+.meas{position:absolute;left:50%;top:100%;margin-top:6px;white-space:nowrap;background:rgba(17,17,27,.92);
+  border:1px solid var(--lime);color:var(--lime);padding:2px 6px;border-radius:4px;font-size:11px;pointer-events:none;z-index:4}
+.meas.over{color:var(--red);border-color:var(--red);box-shadow:0 0 8px var(--red)}
