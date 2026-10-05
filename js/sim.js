@@ -102,10 +102,11 @@
         // Pines digitales: el sketch (arduino.js) deja su estado en Lab.pins; cada pin OUTPUT cableado
         // se modela como una fuente de voltaje (HIGH/LOW, o el promedio del duty de analogWrite).
         Object.entries(Lab.pins || {}).forEach(([pin, st]) => {
-          if (st.mode !== 'OUTPUT') return;
           const wired = Lab.wires.some((w) => (w.from.component === c.id && w.from.pin === pin) || (w.to.component === c.id && w.to.pin === pin));
           if (!wired) return;
-          add(c, { t: 'V', p: P(pin), n: P('GND.1'), v: (st.pwm != null ? st.pwm / 255 : st.digital) * 5 });
+          if (st.mode === 'OUTPUT') add(c, { t: 'V', p: P(pin), n: P('GND.1'), v: (st.pwm != null ? st.pwm / 255 : st.digital) * 5 });
+          // INPUT_PULLUP: resistencia interna (~20k) a 5V, igual que el AVR real, para leer botones sin resistencia externa.
+          else if (st.mode === 'INPUT_PULLUP') add(c, { t: 'R', a: P('5V'), b: P(pin), r: 20000 });
         });
       }
       else if (c.type === 'wokwi-resistor') add(c, { t: 'R', a: P('1'), b: P('2'), r: num(pr.value, 220) });
