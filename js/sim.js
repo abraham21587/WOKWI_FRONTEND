@@ -97,7 +97,17 @@
     Lab.comps.forEach((c) => {
       const P = (p) => node(c, p), pr = c.props;
       if (c.type === 'pcl-battery') add(c, { t: 'V', p: P('+'), n: P('-'), v: num(pr.voltage, 9) });
-      else if (/^wokwi-arduino/.test(c.type)) add(c, { t: 'V', p: P('5V'), n: P('GND.1'), v: 5 });
+      else if (/^wokwi-arduino/.test(c.type)) {
+        add(c, { t: 'V', p: P('5V'), n: P('GND.1'), v: 5 });
+        // Pines digitales: el sketch (arduino.js) deja su estado en Lab.pins; cada pin OUTPUT cableado
+        // se modela como una fuente de voltaje (HIGH/LOW, o el promedio del duty de analogWrite).
+        Object.entries(Lab.pins || {}).forEach(([pin, st]) => {
+          if (st.mode !== 'OUTPUT') return;
+          const wired = Lab.wires.some((w) => (w.from.component === c.id && w.from.pin === pin) || (w.to.component === c.id && w.to.pin === pin));
+          if (!wired) return;
+          add(c, { t: 'V', p: P(pin), n: P('GND.1'), v: (st.pwm != null ? st.pwm / 255 : st.digital) * 5 });
+        });
+      }
       else if (c.type === 'wokwi-resistor') add(c, { t: 'R', a: P('1'), b: P('2'), r: num(pr.value, 220) });
       else if (c.type === 'wokwi-led') add(c, { t: 'D', a: P('A'), k: P('C'), vf: LED_VF[pr.color] || 2, rs: 5 });
       else if (c.type === 'pcl-diode') add(c, { t: 'D', a: P('A'), k: P('K'), vf: num(pr.vf, 0.7), rs: 2 });
@@ -109,7 +119,8 @@
         add(c, { t: 'R', a: P('SIG'), b: P('VCC'), r: Math.max(10000 * (1 - t), 1) });
       }
     });
-    return { N: ids.size, els, owner };
+    const volAt = (cid, pin) => { const r = find(K(cid, pin)); return ids.has(r) ? ids.get(r) : null; };
+    return { N: ids.size, els, owner, volAt };
   }
 
   function label(c, text, bad) {
@@ -124,6 +135,16 @@
     const svg = document.querySelector('#wires');
     let res = null, nl = null;
     if (Lab.running) { nl = netlist(); if (nl) res = solve(nl.N, nl.els); else Lab.status('⚠ Añade una batería o un Arduino (referencia de tierra)'); }
+    // Pines no-OUTPUT (entradas): guarda el voltaje que "ven" para que digitalRead/analogRead del sketch lo lean.
+    if (res && Lab.pins) {
+      const ard = Lab.comps.filter((c) => /^wokwi-arduino/.test(c.type));
+      Object.entries(Lab.pins).forEach(([pin, st]) => {
+        if (st.mode === 'OUTPUT') return;
+        const c = ard[0]; if (!c) return;
+        const nid = nl.volAt(c.id, pin), v = nid != null ? res.V(nid) : 0;
+        st.sensedVoltage = v; st.sensedDigital = v > 2.5 ? 1 : 0;
+      });
+    }
     const cur = new Map(), volt = new Map();
     if (res) nl.els.forEach((e, i) => {
       const c = nl.owner[i];
