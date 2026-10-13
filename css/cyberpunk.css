@@ -71,3 +71,25 @@ input:focus,select:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 8p
 .meas{position:absolute;left:50%;top:100%;margin-top:6px;white-space:nowrap;background:rgba(17,17,27,.92);
   border:1px solid var(--lime);color:var(--lime);padding:2px 6px;border-radius:4px;font-size:11px;pointer-events:none;z-index:4}
 .meas.over{color:var(--red);border-color:var(--red);box-shadow:0 0 8px var(--red)}
+
+/* Componentes quemados: misma animación (chamuscado + chispazo + humo) para cualquier tipo */
+.comp.burned{filter:grayscale(.85) brightness(.4) contrast(1.25)}
+.comp.burned .pin{opacity:.3}
+.comp.burned::after{content:'☠';position:absolute;top:-7px;right:-7px;width:16px;height:16px;line-height:16px;
+  text-align:center;font-size:11px;background:#1a1a1a;border:1px solid var(--red);color:var(--red);
+  border-radius:50%;box-shadow:0 0 6px var(--red);z-index:10}
+.burn-fx{position:absolute;inset:0;pointer-events:none;z-index:9;transform-origin:center}
+.burn-flash{position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,180,80,.95) 0%,rgba(255,120,40,.5) 45%,transparent 75%);
+  animation:burnFlash .5s ease-out forwards}
+.smoke-puff{position:absolute;left:50%;top:50%;border-radius:50%;
+  background:radial-gradient(circle,rgba(140,140,150,.92) 0%,rgba(55,55,65,.55) 60%,transparent 100%);
+  filter:blur(2px);animation:smokePuff 1.2s ease-out forwards}
+@keyframes smokePuff{
+  0%{opacity:0;transform:translate(-50%,-50%) translate(0,0) scale(.4)}
+  20%{opacity:.85}
+  100%{opacity:0;transform:translate(-50%,-50%) translate(var(--dx,0px),-54px) scale(2)}
+}
+@keyframes burnFlash{0%{opacity:0}15%{opacity:1}100%{opacity:0}}
+.wire.dead{opacity:.2;filter:none}
+#wires.running .wire.dead{animation:none;stroke-dasharray:none}

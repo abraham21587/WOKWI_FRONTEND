@@ -16,6 +16,8 @@
       const p = document.createElementNS(NS, 'path');
       p.setAttribute('class', 'wire'); p.setAttribute('d', bez(a, b));
       p.style.stroke = w.color; p.style.color = w.color;
+      const fromC = Lab.byId(w.from.component), toC = Lab.byId(w.to.component);
+      if ((fromC && fromC.burned) || (toC && toC.burned)) p.classList.add('dead');
       p.addEventListener('dblclick', () => { Lab.wires = Lab.wires.filter((x) => x !== w); Lab.redraw(); Lab.refreshSim(); });
       svg.appendChild(p);
     });

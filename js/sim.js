@@ -73,6 +73,8 @@
   const GLOW = { red: '#FF5555', green: '#A6E3A1', blue: '#89DCEB', yellow: '#F1FA8C', orange: '#FAB387', white: '#ffffff' };
   const K = (c, p) => c + '|' + p;
   const num = (v, d) => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : d);
+  // Umbrales de daño (aproximados, con fines didácticos): superarlos "quema" el componente.
+  const BURN = { led: 0.05, diode: 1, resistorW: 0.25, arduino: 0.5, battery: 2, contact: 0.5, pot: 0.3 };
 
   function netlist() {
     const parent = new Map();
@@ -95,16 +97,27 @@
     const els = [], owner = [];
     const add = (c, e) => { els.push(e); owner.push(c); };
     Lab.comps.forEach((c) => {
+      if (c.burned) return; // quemado: queda desconectado, como una pieza real que ya no conduce
       const P = (p) => node(c, p), pr = c.props;
-      if (c.type === 'pcl-battery') add(c, { t: 'V', p: P('+'), n: P('-'), v: num(pr.voltage, 9) });
+      if (c.type === 'pcl-battery') {
+        // Cable directo entre + y -: cortocircuito puro. El solver no puede "medir" esto (ambos
+        // terminales son el mismo nodo), así que se detecta y se quema de inmediato.
+        if (P('+') === P('-')) { Lab.triggerBurn(c, 'cortocircuito directo entre sus terminales'); return; }
+        add(c, { t: 'V', p: P('+'), n: P('-'), v: num(pr.voltage, 9) });
+      }
       else if (/^wokwi-arduino/.test(c.type)) {
+        if (P('5V') === P('GND.1')) { Lab.triggerBurn(c, 'cortocircuito directo entre 5V y GND'); return; }
         add(c, { t: 'V', p: P('5V'), n: P('GND.1'), v: 5 });
         // Pines digitales: el sketch (arduino.js) deja su estado en Lab.pins; cada pin OUTPUT cableado
         // se modela como una fuente de voltaje (HIGH/LOW, o el promedio del duty de analogWrite).
         Object.entries(Lab.pins || {}).forEach(([pin, st]) => {
           const wired = Lab.wires.some((w) => (w.from.component === c.id && w.from.pin === pin) || (w.to.component === c.id && w.to.pin === pin));
           if (!wired) return;
-          if (st.mode === 'OUTPUT') add(c, { t: 'V', p: P(pin), n: P('GND.1'), v: (st.pwm != null ? st.pwm / 255 : st.digital) * 5 });
+          if (st.mode === 'OUTPUT') {
+            // Un pin de salida cableado directo a GND (sin carga) es un corto que fríe el pin.
+            if (P(pin) === P('GND.1')) { Lab.triggerBurn(c, `pin ${pin} en cortocircuito directo con GND`); return; }
+            add(c, { t: 'V', p: P(pin), n: P('GND.1'), v: (st.pwm != null ? st.pwm / 255 : st.digital) * 5 });
+          }
           // INPUT_PULLUP: resistencia interna (~20k) a 5V, igual que el AVR real, para leer botones sin resistencia externa.
           else if (st.mode === 'INPUT_PULLUP') add(c, { t: 'R', a: P('5V'), b: P(pin), r: 20000 });
         });
@@ -154,7 +167,22 @@
     });
     svg.classList.toggle('running', !!res && res.cur.some((i) => Math.abs(i) > 1e-4));
     Lab.comps.forEach((c) => {
-      const i = cur.get(c) || 0, v = volt.get(c), isLed = c.type === 'wokwi-led';
+      if (c.burned) return; // ya está quemado: se queda carbonizado, sin más actualizaciones
+      const i = cur.get(c) || 0, v = volt.get(c), ai = Math.abs(i), isLed = c.type === 'wokwi-led';
+      if (res && cur.has(c)) {
+        let why = null;
+        if (isLed && ai > BURN.led) why = `${mA(ai)} superan los ~50 mA máximos: faltó o era muy baja la resistencia en serie`;
+        else if (c.type === 'pcl-diode' && ai > BURN.diode) why = `${ai.toFixed(2)} A superan su corriente máxima (~1 A)`;
+        else if (c.type === 'wokwi-resistor') {
+          const r = num(c.props.value, 220), p = ai * ai * r;
+          if (p > BURN.resistorW) why = `disipó ${p.toFixed(2)} W (máx. ${BURN.resistorW} W): usa una resistencia de mayor valor`;
+        }
+        else if (/^wokwi-arduino/.test(c.type) && ai > BURN.arduino) why = `${ai.toFixed(2)} A por la placa: revisa cortocircuitos o voltajes mal conectados`;
+        else if (c.type === 'pcl-battery' && ai > BURN.battery) why = `${ai.toFixed(1)} A: probablemente un cortocircuito`;
+        else if ((c.type === 'wokwi-pushbutton' || c.type === 'wokwi-slide-switch') && ai > BURN.contact) why = `${ai.toFixed(2)} A por los contactos: falta una resistencia limitadora`;
+        else if (c.type === 'wokwi-potentiometer' && ai > BURN.pot) why = `${ai.toFixed(2)} A por la pista resistiva`;
+        if (why) { Lab.triggerBurn(c, why); return; }
+      }
       if (isLed) {
         const lit = i > 0.0005;
         c.el.value = lit; c.el.brightness = Math.min(1, i / 0.02);
