@@ -85,6 +85,72 @@
   }
   prop(Inductor, 'value', 1); // H
 
+  // Fuente variable: como la batería, pero con forma de onda (DC/cuadrada/senoidal/triangular)
+  // configurable — ideal para alimentar circuitos que se observan con el osciloscopio.
+  const WAVE_ICON = {
+    DC: '<line x1="8" y1="22" x2="62" y2="22" stroke="#CBA6F7" stroke-width="1.5"/>',
+    square: '<path d="M8,30 L8,14 L22,14 L22,30 L36,30 L36,14 L50,14 L50,30 L62,30" fill="none" stroke="#CBA6F7" stroke-width="1.5"/>',
+    sine: '<path d="M8,22 Q15,8 22,22 T36,22 T50,22 T64,22" fill="none" stroke="#CBA6F7" stroke-width="1.5"/>',
+    triangle: '<path d="M8,30 L15,14 L22,30 L29,14 L36,30 L43,14 L50,30 L57,14" fill="none" stroke="#CBA6F7" stroke-width="1.5"/>'
+  };
+  const WAVE_LABEL = { DC: 'DC', square: 'CUADRADA', sine: 'SENOIDAL', triangle: 'TRIANGULAR' };
+  class FunctionSource extends Part {
+    get pinInfo() { return [{ name: '+', x: 86, y: 10 }, { name: '-', x: 86, y: 32 }]; }
+    draw() {
+      const mode = this.mode, amp = Number(this.amplitude), freq = Number(this.freq);
+      const sub = mode === 'DC' ? `${amp}V` : `±${amp}V · ${freq}Hz`;
+      this.innerHTML = `<svg width="90" height="44" viewBox="0 0 90 44">
+        <line x1="70" y1="10" x2="86" y2="10" stroke="#FF5555" stroke-width="3"/>
+        <line x1="70" y1="32" x2="86" y2="32" stroke="#888" stroke-width="3"/>
+        <rect x="1" y="1" width="70" height="42" rx="5" fill="#1e1e2e" stroke="#89DCEB"/>
+        ${WAVE_ICON[mode] || WAVE_ICON.DC}
+        <text x="36" y="40" text-anchor="middle" fill="#A6E3A1" font-size="7" font-family="monospace">${sub}</text>
+        <text x="73" y="8" fill="#FF5555" font-size="9">+</text><text x="73" y="30" fill="#ccc" font-size="9">−</text></svg>`;
+    }
+  }
+  prop(FunctionSource, 'mode', 'DC');
+  prop(FunctionSource, 'amplitude', 9);
+  prop(FunctionSource, 'freq', 1);
+
+  // Osciloscopio: 2 canales + GND común. El trazo lo actualiza sim.js llamando a renderTrace()
+  // en cada paso de tiempo (no re-renderiza todo el componente, solo mueve los <path>).
+  const SCOPE_W = 200, SCOPE_H = 160, SCOPE_DIVX = 10, SCOPE_DIVY = 8;
+  class Oscilloscope extends Part {
+    get pinInfo() { return [{ name: 'GND', x: 2, y: 140 }, { name: 'CH1', x: 2, y: 40 }, { name: 'CH2', x: 2, y: 70 }]; }
+    draw() {
+      let grid = '';
+      for (let i = 1; i < SCOPE_DIVX; i++) grid += `<line x1="${i * SCOPE_W / SCOPE_DIVX}" y1="0" x2="${i * SCOPE_W / SCOPE_DIVX}" y2="${SCOPE_H}" stroke="#2a2a3a"/>`;
+      for (let i = 1; i < SCOPE_DIVY; i++) grid += `<line x1="0" y1="${i * SCOPE_H / SCOPE_DIVY}" x2="${SCOPE_W}" y2="${i * SCOPE_H / SCOPE_DIVY}" stroke="#2a2a3a"/>`;
+      this.innerHTML = `<svg width="${SCOPE_W + 20}" height="${SCOPE_H + 24}" viewBox="0 0 ${SCOPE_W + 20} ${SCOPE_H + 24}">
+        <rect x="0" y="0" width="${SCOPE_W + 20}" height="${SCOPE_H + 24}" rx="6" fill="#1e1e2e" stroke="#89DCEB"/>
+        <text x="${(SCOPE_W + 20) / 2}" y="12" text-anchor="middle" fill="#CBA6F7" font-size="8" font-family="monospace">OSCILOSCOPIO</text>
+        <g transform="translate(10,16)">
+          <rect x="0" y="0" width="${SCOPE_W}" height="${SCOPE_H}" fill="#0a0a12" stroke="#45475a"/>
+          <line x1="0" y1="${SCOPE_H / 2}" x2="${SCOPE_W}" y2="${SCOPE_H / 2}" stroke="#45475a" stroke-dasharray="3 3"/>
+          ${grid}
+          <path class="tr1" d="" fill="none" stroke="#A6E3A1" stroke-width="1.5"/>
+          <path class="tr2" d="" fill="none" stroke="#89DCEB" stroke-width="1.5"/>
+        </g>
+        <text x="4" y="${SCOPE_H + 36}" fill="#A6E3A1" font-size="7" font-family="monospace">CH1</text>
+        <text x="30" y="${SCOPE_H + 36}" fill="#89DCEB" font-size="7" font-family="monospace">CH2</text>
+        <text x="${SCOPE_W - 60}" y="${SCOPE_H + 36}" fill="#6c7086" font-size="7" font-family="monospace">${Number(this.voltDiv)}V/div · ${Number(this.timeDiv)}s/div</text>
+      </svg>`;
+    }
+    // Mueve solo los trazos (llamado cada tick por sim.js); no toca el resto del SVG.
+    renderTrace(samples, voltDiv, timeDiv) {
+      const pxPerSec = SCOPE_W / (timeDiv * SCOPE_DIVX), pxPerVolt = SCOPE_H / (voltDiv * SCOPE_DIVY);
+      const tMax = samples.length ? samples[samples.length - 1].t : 0;
+      const x = (t) => (SCOPE_W - (tMax - t) * pxPerSec).toFixed(1);
+      const y = (v) => (SCOPE_H / 2 - v * pxPerVolt).toFixed(1);
+      const path = (key) => samples.map((s, i) => `${i ? 'L' : 'M'}${x(s.t)},${y(s[key])}`).join(' ');
+      const p1 = this.querySelector('.tr1'), p2 = this.querySelector('.tr2');
+      if (p1) p1.setAttribute('d', path('v1'));
+      if (p2) p2.setAttribute('d', path('v2'));
+    }
+  }
+  prop(Oscilloscope, 'voltDiv', 5);
+  prop(Oscilloscope, 'timeDiv', 0.2);
+
   // Instrumentos de medición: misma estética "glass" que batería/diodo (pantalla oscura + texto neón).
   // La lectura en vivo la pone sim.js debajo del componente (igual que hace con resistencias/LEDs);
   // el texto dentro del SVG es solo el rótulo/placeholder del instrumento.
@@ -121,6 +187,7 @@
 
   [['pcl-diode', Diode], ['pcl-battery', Battery], ['pcl-breadboard', Breadboard],
    ['pcl-capacitor', Capacitor], ['pcl-inductor', Inductor],
+   ['pcl-function-source', FunctionSource], ['pcl-oscilloscope', Oscilloscope],
    ['pcl-voltmeter', Voltmeter], ['pcl-ammeter', Ammeter], ['pcl-ohmmeter', Ohmmeter], ['pcl-multimeter', Multimeter]
   ].forEach(([n, c]) => {
     if (!customElements.get(n)) customElements.define(n, c);
@@ -148,6 +215,7 @@
     'wokwi-esp32-devkit-v1': C('ESP32 DevKit V1', 'Microcontroladores'),
     'wokwi-nano-rp2040-connect': C('Nano RP2040 Connect', 'Microcontroladores'),
     'pcl-battery': C('Batería / Fuente DC', 'Alimentación', { voltage: 9 }),
+    'pcl-function-source': C('Fuente variable (DC/onda)', 'Alimentación', { mode: 'DC', amplitude: 9, freq: 1 }),
     'pcl-breadboard': C('Protoboard', 'Conexión'),
     'wokwi-resistor': C('Resistencia', 'Pasivos', { value: '220' }),
     'wokwi-potentiometer': C('Potenciómetro', 'Pasivos'),
@@ -199,7 +267,8 @@
     'pcl-voltmeter': C('Voltímetro', 'Instrumentos'),
     'pcl-ammeter': C('Amperímetro', 'Instrumentos'),
     'pcl-ohmmeter': C('Óhmetro', 'Instrumentos'),
-    'pcl-multimeter': C('Multímetro (V / A / Ω)', 'Instrumentos', { mode: 'V' })
+    'pcl-multimeter': C('Multímetro (V / A / Ω)', 'Instrumentos', { mode: 'V' }),
+    'pcl-oscilloscope': C('Osciloscopio (2 canales)', 'Instrumentos', { voltDiv: 5, timeDiv: 0.2 })
   };
 
   // La protoboard siempre queda detrás de los demás componentes

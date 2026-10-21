@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node test/run-all.js"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
   },
   "repository": {
     "type": "git",

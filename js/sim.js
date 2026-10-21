@@ -84,6 +84,18 @@
   // Umbrales de daño (aproximados, con fines didácticos): superarlos "quema" el componente.
   const BURN = { led: 0.05, diode: 1, resistorW: 0.25, arduino: 0.5, battery: 2, contact: 0.5, pot: 0.3 };
 
+  // Fuente variable: su voltaje depende del tiempo transcurrido de simulación (Lab._simTime),
+  // no es constante como la batería. Formas de onda bipolares clásicas de un generador de señal.
+  function sourceVoltage(pr, t) {
+    const amp = num(pr.amplitude, 9), freq = Math.max(num(pr.freq, 1), 1e-6), mode = pr.mode || 'DC';
+    if (mode === 'DC') return amp;
+    const phase = (t * freq) % 1;
+    if (mode === 'square') return phase < 0.5 ? amp : -amp;
+    if (mode === 'sine') return amp * Math.sin(2 * Math.PI * phase);
+    if (mode === 'triangle') return amp * (phase < 0.5 ? 4 * phase - 1 : 3 - 4 * phase);
+    return amp;
+  }
+
   // Agrupa los pines unidos por cables o por conexiones internas (une-busca); lo reutiliza
   // también measureResistance() para el óhmetro, que necesita la topología sin pedir netlist().
   function buildGraph() {
@@ -102,7 +114,8 @@
 
   function netlist() {
     const find = buildGraph();
-    const ard = Lab.comps.find((c) => /^wokwi-arduino/.test(c.type)), bat = Lab.comps.find((c) => c.type === 'pcl-battery');
+    const ard = Lab.comps.find((c) => /^wokwi-arduino/.test(c.type));
+    const bat = Lab.comps.find((c) => c.type === 'pcl-battery' || c.type === 'pcl-function-source');
     const ref = ard ? K(ard.id, 'GND.1') : bat ? K(bat.id, '-') : null;
     if (!ref) return null;
     const ids = new Map([[find(ref), 0]]);
@@ -156,6 +169,13 @@
         c.transient = c.transient || { iPrev: 0 };
         add(c, { t: 'L', a: P('1'), b: P('2'), l: num(pr.value, 1), iPrev: c.transient.iPrev });
       }
+      else if (c.type === 'pcl-function-source') {
+        if (P('+') === P('-')) { Lab.triggerBurn(c, 'cortocircuito directo entre sus terminales'); return; }
+        add(c, { t: 'V', p: P('+'), n: P('-'), v: sourceVoltage(pr, Lab._simTime || 0) });
+      }
+      // Osciloscopio: ideal (no aporta conductancia), solo registra sus 3 nodos; sim.js muestrea
+      // su voltaje en cada paso de tiempo para dibujar el trazo (ver Lab.refreshSim).
+      else if (c.type === 'pcl-oscilloscope') { P('GND'); P('CH1'); P('CH2'); }
       // Instrumentos: el amperímetro es ~0 Ω (va en serie, mide por caída de tensión); el
       // voltímetro y el óhmetro son ideales (resistencia infinita), así que solo registran
       // sus nodos sin aportar conductancia — su lectura se calcula aparte en Lab.refreshSim.
@@ -226,6 +246,7 @@
     const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const dt = Lab.running ? (Lab._wasRunning ? Math.min(0.2, Math.max(0, (now - Lab._lastTick) / 1000)) : 0.02) : 0;
     Lab._lastTick = now; Lab._wasRunning = Lab.running;
+    Lab._simTime = (Lab._simTime || 0) + dt; // reloj de la simulación, usado por la fuente variable
     let res = null, nl = null;
     if (Lab.running) { nl = netlist(); if (nl) res = solve(nl.N, nl.els, dt); else Lab.status('⚠ Añade una batería o un Arduino (referencia de tierra)'); }
     // Pines no-OUTPUT (entradas): guarda el voltaje que "ven" para que digitalRead/analogRead del sketch lo lean.
@@ -260,7 +281,7 @@
           if (p > BURN.resistorW) why = `disipó ${p.toFixed(2)} W (máx. ${BURN.resistorW} W): usa una resistencia de mayor valor`;
         }
         else if (/^wokwi-arduino/.test(c.type) && ai > BURN.arduino) why = `${ai.toFixed(2)} A por la placa: revisa cortocircuitos o voltajes mal conectados`;
-        else if (c.type === 'pcl-battery' && ai > BURN.battery) why = `${ai.toFixed(1)} A: probablemente un cortocircuito`;
+        else if ((c.type === 'pcl-battery' || c.type === 'pcl-function-source') && ai > BURN.battery) why = `${ai.toFixed(1)} A: probablemente un cortocircuito`;
         else if ((c.type === 'wokwi-pushbutton' || c.type === 'wokwi-slide-switch') && ai > BURN.contact) why = `${ai.toFixed(2)} A por los contactos: falta una resistencia limitadora`;
         else if (c.type === 'wokwi-potentiometer' && ai > BURN.pot) why = `${ai.toFixed(2)} A por la pista resistiva`;
         if (why) { Lab.triggerBurn(c, why); return; }
@@ -272,7 +293,7 @@
       }
       let t = '';
       if (res && cur.has(c)) {
-        if (c.type === 'pcl-battery') t = `${v.toFixed(1)} V · ${mA(i)}`;
+        if (c.type === 'pcl-battery' || c.type === 'pcl-function-source') t = `${v.toFixed(2)} V · ${mA(i)}`;
         else if (c.type === 'wokwi-resistor') t = `${v.toFixed(2)} V · ${mA(i)}`;
         else if (c.type === 'pcl-capacitor' || c.type === 'pcl-inductor') t = `${v.toFixed(2)} V · ${ampStr(i)}`;
         else if (isLed || c.type === 'pcl-diode') t = (isLed && i > 0.03 ? '⚠ ' : '') + mA(i);
@@ -288,16 +309,31 @@
       if (c.type === 'pcl-ohmmeter' || (c.type === 'pcl-multimeter' && c.props.mode === 'Ω')) {
         t = Lab.running ? '⚠ desconecta la fuente' : ohmStr(measureResistance(c, 'COM', c.type === 'pcl-ohmmeter' ? 'Ω' : 'VΩA'));
       }
+      if (c.type === 'pcl-oscilloscope') {
+        c.scope = c.scope || { samples: [] };
+        if (res && Lab.running) {
+          const ng = nl.volAt(c.id, 'GND'), n1 = nl.volAt(c.id, 'CH1'), n2 = nl.volAt(c.id, 'CH2');
+          const vg = ng != null ? res.V(ng) : 0;
+          c.scope.samples.push({ t: Lab._simTime, v1: (n1 != null ? res.V(n1) : 0) - vg, v2: (n2 != null ? res.V(n2) : 0) - vg });
+          const windowSec = num(c.props.timeDiv, 0.2) * 10;
+          while (c.scope.samples.length && Lab._simTime - c.scope.samples[0].t > windowSec) c.scope.samples.shift();
+        }
+        if (c.el.renderTrace) c.el.renderTrace(c.scope.samples, num(c.props.voltDiv, 5), num(c.props.timeDiv, 0.2));
+      }
       label(c, t, isLed && i > 0.03);
     });
   };
 
-  // Cada Play/Stop reinicia condensadores y bobinas (arrancan descargados/sin corriente), para
-  // que las demostraciones sean repetibles; también evita un Δt gigante tras un rato detenido.
+  // Cada Play/Stop reinicia condensadores, bobinas y el osciloscopio (arrancan descargados/sin
+  // trazo), para que las demostraciones sean repetibles; también evita un Δt gigante tras un
+  // rato detenido y reinicia el reloj que usa la fuente variable para su forma de onda.
   const baseSetRunning = Lab.setRunning;
   Lab.setRunning = (r) => {
-    Lab.comps.forEach((c) => { if (c.type === 'pcl-capacitor' || c.type === 'pcl-inductor') c.transient = null; });
-    Lab._wasRunning = false;
+    Lab.comps.forEach((c) => {
+      if (c.type === 'pcl-capacitor' || c.type === 'pcl-inductor') c.transient = null;
+      else if (c.type === 'pcl-oscilloscope') c.scope = { samples: [] };
+    });
+    Lab._wasRunning = false; Lab._simTime = 0;
     baseSetRunning(r);
   };
   // Reloj maestro: mientras la simulación corre, vuelve a resolver el circuito cada 50ms para que
@@ -331,6 +367,19 @@
       const v = ask('Modo del multímetro (V = voltímetro, A = amperímetro, Ω = óhmetro):', c.props.mode);
       const m = { v: 'V', a: 'A', o: 'Ω', 'ω': 'Ω' }[String(v || '').trim().toLowerCase()];
       if (m) c.props.mode = c.el.mode = m;
+    }
+    else if (c.type === 'pcl-function-source') {
+      const mv = ask('Forma de onda (DC, square, sine, triangle):', c.props.mode);
+      const m = { dc: 'DC', square: 'square', cuadrada: 'square', sine: 'sine', senoidal: 'sine', triangle: 'triangle', triangular: 'triangle' }[String(mv || '').trim().toLowerCase()];
+      if (m) {
+        c.props.mode = c.el.mode = m;
+        const av = ask('Amplitud (V):', c.props.amplitude); if (num(av, 0) > 0) c.props.amplitude = c.el.amplitude = num(av);
+        if (m !== 'DC') { const fv = ask('Frecuencia (Hz):', c.props.freq); if (num(fv, 0) > 0) c.props.freq = c.el.freq = num(fv); }
+      }
+    }
+    else if (c.type === 'pcl-oscilloscope') {
+      const vd = ask('Voltios por división:', c.props.voltDiv); if (num(vd, 0) > 0) c.props.voltDiv = c.el.voltDiv = num(vd);
+      const td = ask('Segundos por división:', c.props.timeDiv); if (num(td, 0) > 0) c.props.timeDiv = c.el.timeDiv = num(td);
     }
     else return Lab.status('Este componente no tiene propiedades editables');
     Lab.refreshSim();
