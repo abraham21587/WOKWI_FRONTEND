@@ -22,7 +22,11 @@
     return x;
   }
   // N = nº de nodos (0 = tierra). Elementos: R{a,b,r}  D{a,k,vf,rs}  V{p,n,v}
-  function solve(N, els) {
+  // C{a,b,c,vPrev}  L{a,b,l,iPrev} — condensador/bobina, modelados como su equivalente de
+  // Norton/Thévenin por integración trapezoidal hacia atrás (Euler implícito): en cada paso de
+  // tiempo dt se comportan como una resistencia equivalente + una fuente que "recuerda" el estado
+  // del paso anterior (vPrev/iPrev), que vive en sim.js (ver Lab.refreshSim) y no aquí.
+  function solve(N, els, dt) {
     const nv = els.filter((e) => e.t === 'V').length, n = N - 1 + nv;
     const on = els.map(() => false);
     let x = [];
@@ -38,6 +42,8 @@
       els.forEach((e, i) => {
         if (e.t === 'R') g(e.a, e.b, 1 / Math.max(e.r, 1e-3));
         else if (e.t === 'D') { if (on[i]) { const G = 1 / e.rs; g(e.a, e.k, G); inj(e.a, G * e.vf); inj(e.k, -G * e.vf); } }
+        else if (e.t === 'C') { const G = e.c / Math.max(dt, 1e-6); g(e.a, e.b, G); inj(e.a, G * e.vPrev); inj(e.b, -G * e.vPrev); }
+        else if (e.t === 'L') { const G = Math.max(dt, 1e-6) / Math.max(e.l, 1e-9); g(e.a, e.b, G); inj(e.a, -e.iPrev); inj(e.b, e.iPrev); }
         else {
           const row = N - 1 + vi++;
           if (e.p) { A[row][e.p - 1] += 1; A[e.p - 1][row] += 1; }
@@ -61,6 +67,8 @@
     const cur = els.map((e, i) => {
       if (e.t === 'R') return (V(e.a) - V(e.b)) / Math.max(e.r, 1e-3);
       if (e.t === 'D') return on[i] ? (V(e.a) - V(e.k) - e.vf) / e.rs : 0;
+      if (e.t === 'C') return (V(e.a) - V(e.b) - e.vPrev) * (e.c / Math.max(dt, 1e-6));
+      if (e.t === 'L') return (V(e.a) - V(e.b)) * (Math.max(dt, 1e-6) / Math.max(e.l, 1e-9)) + e.iPrev;
       return -x[N - 1 + vi++]; // corriente que entrega la fuente
     });
     return { V, cur };
@@ -138,6 +146,16 @@
         add(c, { t: 'R', a: P('GND'), b: P('SIG'), r: Math.max(10000 * t, 1) });
         add(c, { t: 'R', a: P('SIG'), b: P('VCC'), r: Math.max(10000 * (1 - t), 1) });
       }
+      // Condensador/bobina: recuerdan su estado (vPrev/iPrev) entre cuadros de simulación en
+      // c.transient, que se inicializa en 0 la primera vez y se reinicia al pulsar Play/Stop.
+      else if (c.type === 'pcl-capacitor') {
+        c.transient = c.transient || { vPrev: 0 };
+        add(c, { t: 'C', a: P('1'), b: P('2'), c: num(pr.value, 1000) * 1e-6, vPrev: c.transient.vPrev });
+      }
+      else if (c.type === 'pcl-inductor') {
+        c.transient = c.transient || { iPrev: 0 };
+        add(c, { t: 'L', a: P('1'), b: P('2'), l: num(pr.value, 1), iPrev: c.transient.iPrev });
+      }
       // Instrumentos: el amperímetro es ~0 Ω (va en serie, mide por caída de tensión); el
       // voltímetro y el óhmetro son ideales (resistencia infinita), así que solo registran
       // sus nodos sin aportar conductancia — su lectura se calcula aparte en Lab.refreshSim.
@@ -170,6 +188,9 @@
         resEls.push({ a: node(K(cc.id, 'GND')), b: node(K(cc.id, 'SIG')), r: Math.max(10000 * t, 1) });
         resEls.push({ a: node(K(cc.id, 'SIG')), b: node(K(cc.id, 'VCC')), r: Math.max(10000 * (1 - t), 1) });
       }
+      // Una bobina ideal es, en DC, un simple cable (~0 Ω). Un condensador ideal es circuito
+      // abierto en DC, así que no se agrega aquí (se ignora, igual que un diodo o una fuente).
+      else if (cc.type === 'pcl-inductor') resEls.push({ a: node(K(cc.id, '1')), b: node(K(cc.id, '2')), r: 0.001 });
     });
     if (a === b) return 0;
     const n = ids.size, A = Array.from({ length: n }, () => new Array(n).fill(0)), bArr = new Array(n).fill(0);
@@ -199,8 +220,14 @@
 
   Lab.refreshSim = () => {
     const svg = document.querySelector('#wires');
+    // Δt real transcurrido desde la última vez que se resolvió el circuito (tope en 0.2s para
+    // que una pestaña en segundo plano no haga "saltar" condensadores/bobinas de golpe). Al
+    // arranque (o justo después de Play/Stop, ver más abajo) se usa un primer paso pequeño fijo.
+    const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const dt = Lab.running ? (Lab._wasRunning ? Math.min(0.2, Math.max(0, (now - Lab._lastTick) / 1000)) : 0.02) : 0;
+    Lab._lastTick = now; Lab._wasRunning = Lab.running;
     let res = null, nl = null;
-    if (Lab.running) { nl = netlist(); if (nl) res = solve(nl.N, nl.els); else Lab.status('⚠ Añade una batería o un Arduino (referencia de tierra)'); }
+    if (Lab.running) { nl = netlist(); if (nl) res = solve(nl.N, nl.els, dt); else Lab.status('⚠ Añade una batería o un Arduino (referencia de tierra)'); }
     // Pines no-OUTPUT (entradas): guarda el voltaje que "ven" para que digitalRead/analogRead del sketch lo lean.
     if (res && Lab.pins) {
       const ard = Lab.comps.filter((c) => /^wokwi-arduino/.test(c.type));
@@ -215,7 +242,10 @@
     if (res) nl.els.forEach((e, i) => {
       const c = nl.owner[i];
       cur.set(c, (cur.get(c) || 0) + res.cur[i]);
-      volt.set(c, e.t === 'R' ? res.V(e.a) - res.V(e.b) : e.t === 'D' ? res.V(e.a) - res.V(e.k) : e.v);
+      volt.set(c, e.t === 'R' || e.t === 'C' || e.t === 'L' ? res.V(e.a) - res.V(e.b) : e.t === 'D' ? res.V(e.a) - res.V(e.k) : e.v);
+      // Guarda el estado de este instante para que el próximo refreshSim() siga desde aquí.
+      if (e.t === 'C') c.transient.vPrev = res.V(e.a) - res.V(e.b);
+      else if (e.t === 'L') c.transient.iPrev = res.cur[i];
     });
     svg.classList.toggle('running', !!res && res.cur.some((i) => Math.abs(i) > 1e-4));
     Lab.comps.forEach((c) => {
@@ -244,6 +274,7 @@
       if (res && cur.has(c)) {
         if (c.type === 'pcl-battery') t = `${v.toFixed(1)} V · ${mA(i)}`;
         else if (c.type === 'wokwi-resistor') t = `${v.toFixed(2)} V · ${mA(i)}`;
+        else if (c.type === 'pcl-capacitor' || c.type === 'pcl-inductor') t = `${v.toFixed(2)} V · ${ampStr(i)}`;
         else if (isLed || c.type === 'pcl-diode') t = (isLed && i > 0.03 ? '⚠ ' : '') + mA(i);
         else if (c.type === 'pcl-ammeter' || (c.type === 'pcl-multimeter' && c.props.mode === 'A')) t = ampStr(i);
       }
@@ -260,6 +291,18 @@
       label(c, t, isLed && i > 0.03);
     });
   };
+
+  // Cada Play/Stop reinicia condensadores y bobinas (arrancan descargados/sin corriente), para
+  // que las demostraciones sean repetibles; también evita un Δt gigante tras un rato detenido.
+  const baseSetRunning = Lab.setRunning;
+  Lab.setRunning = (r) => {
+    Lab.comps.forEach((c) => { if (c.type === 'pcl-capacitor' || c.type === 'pcl-inductor') c.transient = null; });
+    Lab._wasRunning = false;
+    baseSetRunning(r);
+  };
+  // Reloj maestro: mientras la simulación corre, vuelve a resolver el circuito cada 50ms para que
+  // condensadores/bobinas avancen en el tiempo aunque no haya un sketch de Arduino marcando el paso.
+  setInterval(() => { if (Lab.running) Lab.refreshSim(); }, 50);
 
   // Componentes interactivos (botón, interruptor, potenciómetro)
   const addC = Lab.addComponent;
@@ -282,6 +325,8 @@
     else if (c.type === 'wokwi-led') { const v = ask('Color (red, green, blue, yellow, orange, white):', c.props.color); if (LED_VF[v]) c.props.color = c.el.color = v; }
     else if (c.type === 'pcl-battery') { const v = ask('Voltaje (V):', c.props.voltage); if (num(v, 0) > 0) c.props.voltage = c.el.voltage = num(v); }
     else if (c.type === 'pcl-diode') { const v = ask('Caída de tensión directa Vf (V):', c.props.vf); if (num(v, 0) > 0) c.props.vf = c.el.vf = num(v); }
+    else if (c.type === 'pcl-capacitor') { const v = ask('Capacitancia en µF:', c.props.value); if (num(v, 0) > 0) c.props.value = c.el.value = num(v); }
+    else if (c.type === 'pcl-inductor') { const v = ask('Inductancia en H:', c.props.value); if (num(v, 0) > 0) c.props.value = c.el.value = num(v); }
     else if (c.type === 'pcl-multimeter') {
       const v = ask('Modo del multímetro (V = voltímetro, A = amperímetro, Ω = óhmetro):', c.props.mode);
       const m = { v: 'V', a: 'A', o: 'Ω', 'ω': 'Ω' }[String(v || '').trim().toLowerCase()];

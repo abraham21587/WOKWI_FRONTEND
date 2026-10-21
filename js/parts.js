@@ -61,6 +61,30 @@
     }
   }
 
+  class Capacitor extends Part {
+    get pinInfo() { return [{ name: '1', x: 2, y: 12 }, { name: '2', x: 48, y: 12 }]; }
+    draw() {
+      this.innerHTML = `<svg width="50" height="24" viewBox="0 0 50 24">
+        <line x1="2" y1="12" x2="21" y2="12" stroke="#bbb" stroke-width="2"/>
+        <line x1="29" y1="12" x2="48" y2="12" stroke="#bbb" stroke-width="2"/>
+        <line x1="21" y1="2" x2="21" y2="22" stroke="#89DCEB" stroke-width="3"/>
+        <line x1="29" y1="2" x2="29" y2="22" stroke="#89DCEB" stroke-width="3"/></svg>`;
+    }
+  }
+  prop(Capacitor, 'value', 1000); // µF
+
+  class Inductor extends Part {
+    get pinInfo() { return [{ name: '1', x: 2, y: 12 }, { name: '2', x: 68, y: 12 }]; }
+    draw() {
+      this.innerHTML = `<svg width="70" height="24" viewBox="0 0 70 24">
+        <line x1="2" y1="12" x2="11" y2="12" stroke="#bbb" stroke-width="2"/>
+        <path d="M11,12 a5.75,8 0 0 1 11.5,0 a5.75,8 0 0 1 11.5,0 a5.75,8 0 0 1 11.5,0 a5.75,8 0 0 1 11.5,0"
+          fill="none" stroke="#FAB387" stroke-width="2.5"/>
+        <line x1="59" y1="12" x2="68" y2="12" stroke="#bbb" stroke-width="2"/></svg>`;
+    }
+  }
+  prop(Inductor, 'value', 1); // H
+
   // Instrumentos de medición: misma estética "glass" que batería/diodo (pantalla oscura + texto neón).
   // La lectura en vivo la pone sim.js debajo del componente (igual que hace con resistencias/LEDs);
   // el texto dentro del SVG es solo el rótulo/placeholder del instrumento.
@@ -96,6 +120,7 @@
   prop(Multimeter, 'mode', 'V');
 
   [['pcl-diode', Diode], ['pcl-battery', Battery], ['pcl-breadboard', Breadboard],
+   ['pcl-capacitor', Capacitor], ['pcl-inductor', Inductor],
    ['pcl-voltmeter', Voltmeter], ['pcl-ammeter', Ammeter], ['pcl-ohmmeter', Ohmmeter], ['pcl-multimeter', Multimeter]
   ].forEach(([n, c]) => {
     if (!customElements.get(n)) customElements.define(n, c);
@@ -127,6 +152,8 @@
     'wokwi-resistor': C('Resistencia', 'Pasivos', { value: '220' }),
     'wokwi-potentiometer': C('Potenciómetro', 'Pasivos'),
     'wokwi-slide-potentiometer': C('Potenciómetro deslizante', 'Pasivos'),
+    'pcl-capacitor': C('Condensador', 'Pasivos', { value: 1000 }),
+    'pcl-inductor': C('Bobina / Inductor', 'Pasivos', { value: 1 }),
     'pcl-diode': C('Diodo 1N4007', 'Semiconductores', { vf: 0.7 }),
     'wokwi-led': C('LED', 'Semiconductores', { color: 'red' }),
     'wokwi-rgb-led': C('LED RGB', 'Semiconductores'),
