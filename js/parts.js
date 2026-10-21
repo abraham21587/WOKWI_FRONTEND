@@ -61,7 +61,43 @@
     }
   }
 
-  [['pcl-diode', Diode], ['pcl-battery', Battery], ['pcl-breadboard', Breadboard]].forEach(([n, c]) => {
+  // Instrumentos de medición: misma estética "glass" que batería/diodo (pantalla oscura + texto neón).
+  // La lectura en vivo la pone sim.js debajo del componente (igual que hace con resistencias/LEDs);
+  // el texto dentro del SVG es solo el rótulo/placeholder del instrumento.
+  const meterSvg = (title, placeholder, hotLabel, color) => `<svg width="90" height="50" viewBox="0 0 90 50">
+    <rect x="1" y="1" width="88" height="48" rx="6" fill="#1e1e2e" stroke="#89DCEB"/>
+    <text x="45" y="12" text-anchor="middle" fill="#CBA6F7" font-size="7" font-family="monospace">${title}</text>
+    <rect x="8" y="17" width="74" height="17" rx="2" fill="#11111b" stroke="#45475a"/>
+    <text x="45" y="29" text-anchor="middle" fill="${color}" font-size="9" font-family="monospace">${placeholder}</text>
+    <line x1="0" y1="25" x2="8" y2="25" stroke="#ccc" stroke-width="2"/>
+    <line x1="82" y1="25" x2="90" y2="25" stroke="${color}" stroke-width="2"/>
+    <text x="3" y="45" fill="#6c7086" font-size="6">COM</text>
+    <text x="70" y="45" fill="${color}" font-size="6">${hotLabel}</text></svg>`;
+
+  class Voltmeter extends Part {
+    get pinInfo() { return [{ name: 'COM', x: 2, y: 25 }, { name: 'V', x: 88, y: 25 }]; }
+    draw() { this.innerHTML = meterSvg('VOLTÍMETRO', '0.00 V', 'V', '#A6E3A1'); }
+  }
+  class Ammeter extends Part {
+    get pinInfo() { return [{ name: 'COM', x: 2, y: 25 }, { name: 'A', x: 88, y: 25 }]; }
+    draw() { this.innerHTML = meterSvg('AMPERÍMETRO', '0 mA', 'A', '#F1FA8C'); }
+  }
+  class Ohmmeter extends Part {
+    get pinInfo() { return [{ name: 'COM', x: 2, y: 25 }, { name: 'Ω', x: 88, y: 25 }]; }
+    draw() { this.innerHTML = meterSvg('ÓHMETRO', '-- Ω', 'Ω', '#FAB387'); }
+  }
+  class Multimeter extends Part {
+    get pinInfo() { return [{ name: 'COM', x: 2, y: 25 }, { name: 'VΩA', x: 88, y: 25 }]; }
+    draw() {
+      const ph = this.mode === 'A' ? '0 mA' : this.mode === 'Ω' ? '-- Ω' : '0.00 V';
+      this.innerHTML = meterSvg('MULTÍMETRO · ' + this.mode, ph, 'VΩA', '#89DCEB');
+    }
+  }
+  prop(Multimeter, 'mode', 'V');
+
+  [['pcl-diode', Diode], ['pcl-battery', Battery], ['pcl-breadboard', Breadboard],
+   ['pcl-voltmeter', Voltmeter], ['pcl-ammeter', Ammeter], ['pcl-ohmmeter', Ohmmeter], ['pcl-multimeter', Multimeter]
+  ].forEach(([n, c]) => {
     if (!customElements.get(n)) customElements.define(n, c);
   });
 
@@ -78,11 +114,14 @@
     return null;
   };
 
-  // Catálogo (solo etiquetas que existen en @wokwi/elements 1.9.x + las propias)
+  // Catálogo (solo etiquetas que existen en @wokwi/elements + las propias del laboratorio)
   const C = (label, cat, props = {}) => ({ label, cat, props });
   Lab.CATALOG = {
     'wokwi-arduino-uno': C('Arduino Uno', 'Microcontroladores'),
     'wokwi-arduino-nano': C('Arduino Nano', 'Microcontroladores'),
+    'wokwi-arduino-mega': C('Arduino Mega', 'Microcontroladores'),
+    'wokwi-esp32-devkit-v1': C('ESP32 DevKit V1', 'Microcontroladores'),
+    'wokwi-nano-rp2040-connect': C('Nano RP2040 Connect', 'Microcontroladores'),
     'pcl-battery': C('Batería / Fuente DC', 'Alimentación', { voltage: 9 }),
     'pcl-breadboard': C('Protoboard', 'Conexión'),
     'wokwi-resistor': C('Resistencia', 'Pasivos', { value: '220' }),
@@ -92,23 +131,48 @@
     'wokwi-led': C('LED', 'Semiconductores', { color: 'red' }),
     'wokwi-rgb-led': C('LED RGB', 'Semiconductores'),
     'wokwi-pushbutton': C('Pulsador', 'Entradas'),
+    'wokwi-pushbutton-6mm': C('Pulsador 6mm', 'Entradas'),
     'wokwi-slide-switch': C('Interruptor deslizante', 'Entradas'),
+    'wokwi-tilt-switch': C('Interruptor de inclinación', 'Entradas'),
     'wokwi-dip-switch-8': C('DIP Switch 8', 'Entradas'),
     'wokwi-membrane-keypad': C('Teclado 4x4', 'Entradas'),
+    'wokwi-analog-joystick': C('Joystick analógico', 'Entradas'),
+    'wokwi-ky-040': C('Encoder rotativo KY-040', 'Entradas'),
+    'wokwi-rotary-dialer': C('Disco rotativo', 'Entradas'),
+    'wokwi-ir-remote': C('Control remoto IR', 'Entradas'),
     'wokwi-buzzer': C('Buzzer', 'Salidas'),
     'wokwi-servo': C('Servomotor', 'Salidas'),
     'wokwi-stepper-motor': C('Motor paso a paso', 'Salidas'),
+    'wokwi-biaxial-stepper': C('Motor paso a paso biaxial', 'Salidas'),
     'wokwi-7segment': C('Display 7 segmentos', 'Salidas'),
     'wokwi-led-bar-graph': C('Barra de LEDs', 'Salidas'),
+    'wokwi-led-ring': C('Anillo de LEDs', 'Salidas'),
     'wokwi-neopixel': C('NeoPixel', 'Salidas'),
+    'wokwi-neopixel-matrix': C('Matriz NeoPixel', 'Salidas'),
+    'wokwi-ks2e-m-dc5': C('Módulo relé KS2E-M-DC5', 'Salidas'),
     'wokwi-lcd1602': C('LCD 16x2', 'Pantallas'),
     'wokwi-lcd2004': C('LCD 20x4', 'Pantallas'),
     'wokwi-ssd1306': C('OLED SSD1306', 'Pantallas'),
+    'wokwi-ili9341': C('TFT ILI9341', 'Pantallas'),
     'wokwi-hc-sr04': C('Ultrasónico HC-SR04', 'Sensores'),
     'wokwi-dht22': C('Temp./Humedad DHT22', 'Sensores'),
     'wokwi-ntc-temperature-sensor': C('Termistor NTC', 'Sensores'),
     'wokwi-photoresistor-sensor': C('Fotorresistencia', 'Sensores'),
-    'wokwi-pir-motion-sensor': C('Sensor PIR', 'Sensores')
+    'wokwi-pir-motion-sensor': C('Sensor PIR', 'Sensores'),
+    'wokwi-gas-sensor': C('Sensor de gas', 'Sensores'),
+    'wokwi-flame-sensor': C('Sensor de llama', 'Sensores'),
+    'wokwi-heart-beat-sensor': C('Sensor de pulso cardíaco', 'Sensores'),
+    'wokwi-big-sound-sensor': C('Sensor de sonido (grande)', 'Sensores'),
+    'wokwi-small-sound-sensor': C('Sensor de sonido (pequeño)', 'Sensores'),
+    'wokwi-ir-receiver': C('Receptor IR', 'Sensores'),
+    'wokwi-mpu6050': C('Acelerómetro/Giroscopio MPU6050', 'Sensores'),
+    'wokwi-hx711': C('Amplificador de celda de carga HX711', 'Sensores'),
+    'wokwi-ds1307': C('Reloj en tiempo real DS1307', 'Otros'),
+    'wokwi-microsd-card': C('Tarjeta microSD', 'Otros'),
+    'pcl-voltmeter': C('Voltímetro', 'Instrumentos'),
+    'pcl-ammeter': C('Amperímetro', 'Instrumentos'),
+    'pcl-ohmmeter': C('Óhmetro', 'Instrumentos'),
+    'pcl-multimeter': C('Multímetro (V / A / Ω)', 'Instrumentos', { mode: 'V' })
   };
 
   // La protoboard siempre queda detrás de los demás componentes

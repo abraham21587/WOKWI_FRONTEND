@@ -6,19 +6,43 @@
   $('#userbox').textContent = u ? '👤 ' + u.name : '';
   $('#btnOut').onclick = Auth.logout;
 
+  // Buscador de componentes
+  const search = document.createElement('input');
+  search.id = 'partSearch'; search.type = 'search'; search.placeholder = '🔍 Buscar componente…';
+  $('#sidebar').appendChild(search);
+
   // Paleta de componentes por categoría
   const cats = {};
   Object.entries(Lab.CATALOG).forEach(([t, d]) => (cats[d.cat] = cats[d.cat] || []).push([t, d.label]));
+  const sections = [];
   Object.entries(cats).forEach(([cat, items]) => {
     const det = document.createElement('details'); det.open = true;
     det.innerHTML = `<summary>${cat}</summary>`;
+    const rows = [];
     items.forEach(([t, label]) => {
       const d = document.createElement('div'); d.className = 'item'; d.draggable = true; d.textContent = label;
       d.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', t));
       d.addEventListener('dblclick', () => Lab.addComponent(t, 120 - Lab.pan.x, 120 - Lab.pan.y));
       det.appendChild(d);
+      rows.push({ el: d, text: label.toLowerCase() });
     });
     $('#sidebar').appendChild(det);
+    sections.push({ det, rows });
+  });
+
+  // Filtra por texto (sin tildes) y abre/oculta categorías según haya coincidencias
+  const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+  search.addEventListener('input', () => {
+    const q = norm(search.value.trim().toLowerCase());
+    sections.forEach(({ det, rows }) => {
+      let any = false;
+      rows.forEach(({ el, text }) => {
+        const match = !q || norm(text).includes(q);
+        el.hidden = !match; if (match) any = true;
+      });
+      det.hidden = !any;
+      if (q) det.open = true;
+    });
   });
 
   $('#bRot').onclick = Lab.rotateSel; $('#bDel').onclick = Lab.deleteSel; $('#bProps').onclick = Lab.editProps;

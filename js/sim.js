@@ -76,7 +76,9 @@
   // Umbrales de daño (aproximados, con fines didácticos): superarlos "quema" el componente.
   const BURN = { led: 0.05, diode: 1, resistorW: 0.25, arduino: 0.5, battery: 2, contact: 0.5, pot: 0.3 };
 
-  function netlist() {
+  // Agrupa los pines unidos por cables o por conexiones internas (une-busca); lo reutiliza
+  // también measureResistance() para el óhmetro, que necesita la topología sin pedir netlist().
+  function buildGraph() {
     const parent = new Map();
     const find = (k) => { if (!parent.has(k)) parent.set(k, k); while (parent.get(k) !== k) { parent.set(k, parent.get(parent.get(k))); k = parent.get(k); } return k; };
     const union = (a, b) => parent.set(find(a), find(b));
@@ -87,7 +89,11 @@
       if (g) (groups[c.id + '#' + g] = groups[c.id + '#' + g] || []).push(K(c.id, p.name));
     }));
     Object.values(groups).forEach((l) => l.slice(1).forEach((k) => union(l[0], k)));
+    return find;
+  }
 
+  function netlist() {
+    const find = buildGraph();
     const ard = Lab.comps.find((c) => /^wokwi-arduino/.test(c.type)), bat = Lab.comps.find((c) => c.type === 'pcl-battery');
     const ref = ard ? K(ard.id, 'GND.1') : bat ? K(bat.id, '-') : null;
     if (!ref) return null;
@@ -132,9 +138,47 @@
         add(c, { t: 'R', a: P('GND'), b: P('SIG'), r: Math.max(10000 * t, 1) });
         add(c, { t: 'R', a: P('SIG'), b: P('VCC'), r: Math.max(10000 * (1 - t), 1) });
       }
+      // Instrumentos: el amperímetro es ~0 Ω (va en serie, mide por caída de tensión); el
+      // voltímetro y el óhmetro son ideales (resistencia infinita), así que solo registran
+      // sus nodos sin aportar conductancia — su lectura se calcula aparte en Lab.refreshSim.
+      else if (c.type === 'pcl-ammeter') add(c, { t: 'R', a: P('COM'), b: P('A'), r: 0.001 });
+      else if (c.type === 'pcl-voltmeter') { P('COM'); P('V'); }
+      else if (c.type === 'pcl-ohmmeter') { P('COM'); P('Ω'); }
+      else if (c.type === 'pcl-multimeter') {
+        if (pr.mode === 'A') add(c, { t: 'R', a: P('COM'), b: P('VΩA'), r: 0.001 });
+        else { P('COM'); P('VΩA'); }
+      }
     });
     const volAt = (cid, pin) => { const r = find(K(cid, pin)); return ids.has(r) ? ids.get(r) : null; };
     return { N: ids.size, els, owner, volAt };
+  }
+
+  // Resistencia equivalente entre los dos pines de un óhmetro/multímetro, ignorando fuentes
+  // (solo tiene sentido con la fuente desconectada, igual que un óhmetro real: ver BURN hint).
+  function measureResistance(c, pinCom, pinHot) {
+    const find = buildGraph();
+    const ids = new Map();
+    const node = (k) => { const r = find(k); if (!ids.has(r)) ids.set(r, ids.size); return ids.get(r); };
+    const a = node(K(c.id, pinCom)), b = node(K(c.id, pinHot));
+    const resEls = [];
+    Lab.comps.forEach((cc) => {
+      if (cc.burned || cc === c) return;
+      if (cc.type === 'wokwi-resistor') resEls.push({ a: node(K(cc.id, '1')), b: node(K(cc.id, '2')), r: num(cc.props.value, 220) });
+      else if (cc.type === 'wokwi-potentiometer') {
+        const min = num(cc.el.min, 0), max = num(cc.el.max, 100);
+        const t = Math.min(1, Math.max(0, (num(cc.el.value, 50) - min) / (max - min || 1)));
+        resEls.push({ a: node(K(cc.id, 'GND')), b: node(K(cc.id, 'SIG')), r: Math.max(10000 * t, 1) });
+        resEls.push({ a: node(K(cc.id, 'SIG')), b: node(K(cc.id, 'VCC')), r: Math.max(10000 * (1 - t), 1) });
+      }
+    });
+    if (a === b) return 0;
+    const n = ids.size, A = Array.from({ length: n }, () => new Array(n).fill(0)), bArr = new Array(n).fill(0);
+    for (let k = 0; k < n; k++) A[k][k] += 1e-9;
+    const g = (p, q, G) => { A[p][p] += G; A[q][q] += G; A[p][q] -= G; A[q][p] -= G; };
+    resEls.forEach((e) => g(e.a, e.b, 1 / Math.max(e.r, 1e-3)));
+    bArr[a] += 1; bArr[b] -= 1;
+    const x = gauss(A, bArr);
+    return x[a] - x[b];
   }
 
   function label(c, text, bad) {
@@ -144,6 +188,14 @@
     l.style.transform = `translateX(-50%) rotate(${-c.rotation}deg)`;
   }
   const mA = (i) => (i * 1000).toFixed(1) + ' mA';
+  const ampStr = (i) => (Math.abs(i) >= 1 ? i.toFixed(3) + ' A' : mA(i));
+  const ohmStr = (r) => {
+    if (!isFinite(r) || Math.abs(r) > 2e6) return 'OL';
+    const ar = Math.abs(r);
+    if (ar >= 1e6) return (r / 1e6).toFixed(2) + ' MΩ';
+    if (ar >= 1e3) return (r / 1e3).toFixed(2) + ' kΩ';
+    return r.toFixed(1) + ' Ω';
+  };
 
   Lab.refreshSim = () => {
     const svg = document.querySelector('#wires');
@@ -193,6 +245,17 @@
         if (c.type === 'pcl-battery') t = `${v.toFixed(1)} V · ${mA(i)}`;
         else if (c.type === 'wokwi-resistor') t = `${v.toFixed(2)} V · ${mA(i)}`;
         else if (isLed || c.type === 'pcl-diode') t = (isLed && i > 0.03 ? '⚠ ' : '') + mA(i);
+        else if (c.type === 'pcl-ammeter' || (c.type === 'pcl-multimeter' && c.props.mode === 'A')) t = ampStr(i);
+      }
+      if (c.type === 'pcl-voltmeter' || (c.type === 'pcl-multimeter' && c.props.mode === 'V')) {
+        if (res) {
+          const pin2 = c.type === 'pcl-voltmeter' ? 'V' : 'VΩA';
+          const na = nl.volAt(c.id, 'COM'), nb = nl.volAt(c.id, pin2);
+          t = ((na != null ? res.V(na) : 0) - (nb != null ? res.V(nb) : 0)).toFixed(2) + ' V';
+        }
+      }
+      if (c.type === 'pcl-ohmmeter' || (c.type === 'pcl-multimeter' && c.props.mode === 'Ω')) {
+        t = Lab.running ? '⚠ desconecta la fuente' : ohmStr(measureResistance(c, 'COM', c.type === 'pcl-ohmmeter' ? 'Ω' : 'VΩA'));
       }
       label(c, t, isLed && i > 0.03);
     });
@@ -219,6 +282,11 @@
     else if (c.type === 'wokwi-led') { const v = ask('Color (red, green, blue, yellow, orange, white):', c.props.color); if (LED_VF[v]) c.props.color = c.el.color = v; }
     else if (c.type === 'pcl-battery') { const v = ask('Voltaje (V):', c.props.voltage); if (num(v, 0) > 0) c.props.voltage = c.el.voltage = num(v); }
     else if (c.type === 'pcl-diode') { const v = ask('Caída de tensión directa Vf (V):', c.props.vf); if (num(v, 0) > 0) c.props.vf = c.el.vf = num(v); }
+    else if (c.type === 'pcl-multimeter') {
+      const v = ask('Modo del multímetro (V = voltímetro, A = amperímetro, Ω = óhmetro):', c.props.mode);
+      const m = { v: 'V', a: 'A', o: 'Ω', 'ω': 'Ω' }[String(v || '').trim().toLowerCase()];
+      if (m) c.props.mode = c.el.mode = m;
+    }
     else return Lab.status('Este componente no tiene propiedades editables');
     Lab.refreshSim();
   };

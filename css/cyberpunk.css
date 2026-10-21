@@ -32,6 +32,7 @@ input:focus,select:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 8p
 
 /* Sidebar */
 #sidebar{position:fixed;left:0;top:52px;bottom:0;width:210px;padding:10px;overflow:auto;z-index:10}
+#partSearch{width:100%;margin-bottom:10px;position:sticky;top:0;z-index:1}
 #sidebar summary{cursor:pointer;color:var(--violet);padding:6px 0;font-weight:600}
 .item{padding:8px;margin:4px 0;border:1px solid var(--line);border-radius:6px;cursor:grab;color:var(--cyan)}
 .item:hover{border-color:var(--cyan);box-shadow:0 0 8px var(--cyan)}
