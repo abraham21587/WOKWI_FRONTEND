@@ -30,6 +30,7 @@
 
   // Informe en PDF: datos del proyecto, lista de componentes/conexiones y el código del sketch.
   function downloadPDF() {
+    if (!window.jspdf) throw new Error('No se pudo cargar la librería de PDF (revisa tu conexión y recarga la página)');
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     const data = Lab.serialize();
