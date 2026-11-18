@@ -70,14 +70,16 @@ input:focus,select:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 8p
 
 /* Menú desplegable (ej. Descargar) */
 .dropdown{position:relative;display:inline-block}
-.dropdown-menu{position:absolute;top:calc(100% + 6px);left:0;display:flex;flex-direction:column;min-width:220px;
+.dropdown-menu{position:absolute;top:calc(100% + 6px);left:0;flex-direction:column;min-width:220px;
   border-radius:8px;padding:6px;z-index:30;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.dropdown-menu:not([hidden]){display:flex}
 .dropdown-menu button{background:none;border:0;color:#cdd6f4;text-align:left;padding:8px 10px;border-radius:6px;
   font:inherit;cursor:pointer;white-space:nowrap}
 .dropdown-menu button:hover{background:rgba(137,220,235,.12);color:var(--cyan)}
 
 /* Modal (ej. Ayuda) */
-.modal-overlay{position:fixed;inset:0;background:rgba(5,5,10,.7);display:flex;align-items:center;justify-content:center;z-index:50}
+.modal-overlay{position:fixed;inset:0;background:rgba(5,5,10,.7);z-index:50}
+.modal-overlay:not([hidden]){display:flex;align-items:center;justify-content:center}
 .modal{width:min(560px,92vw);max-height:84vh;display:flex;flex-direction:column;border-radius:12px;box-shadow:0 0 30px rgba(137,220,235,.2)}
 .modal-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);color:var(--cyan)}
 .modal-head b{color:var(--violet,var(--cyan))}
