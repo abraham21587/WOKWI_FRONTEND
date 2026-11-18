@@ -20,6 +20,15 @@
   <select id="loadSel"><option value="">📂 Cargar circuito…</option></select>
   <button id="btnDel" class="neon red" title="Eliminar el proyecto cargado">🗑</button>
   <button id="btnCode" class="neon purple">{ } CÓDIGO</button>
+  <button id="btnHelp" class="neon cyan" title="Cómo usar la app">❓ AYUDA</button>
+  <div class="dropdown">
+    <button id="btnDownload" class="neon purple">⬇ DESCARGAR</button>
+    <div id="downloadMenu" class="dropdown-menu" hidden>
+      <button data-fmt="pdf">📄 Informe en PDF</button>
+      <button data-fmt="ino">🧩 Código Arduino (.ino)</button>
+      <button data-fmt="json">🗂 Proyecto completo (.json)</button>
+    </div>
+  </div>
   <span class="spacer"></span>
   <span id="userbox"></span>
   <button id="btnOut" class="neon orange">SALIR</button>
@@ -33,6 +42,32 @@
   </div>
   <div id="status"></div>
 </main>
+<div id="helpModal" class="modal-overlay" hidden>
+  <div class="modal glass">
+    <div class="modal-head"><span>❓ Cómo usar PHYSICS<b>CYBER</b>LAB</span><button id="helpClose" title="Cerrar">✕</button></div>
+    <div class="modal-body">
+      <h3>1. Añadir componentes</h3>
+      <p>Arrastra un componente de la barra lateral izquierda hacia el lienzo, o haz <strong>doble clic</strong> sobre él para colocarlo en el centro. Usa el buscador 🔍 para encontrarlo por nombre.</p>
+      <h3>2. Conectar cables</h3>
+      <p>Haz <strong>clic</strong> sobre un pin y luego clic sobre otro pin para crear el cable entre ambos. Cancela con <kbd>Esc</kbd> o clic derecho. Elige el color del cable en la barra inferior izquierda, y borra un cable con <strong>doble clic</strong> sobre él.</p>
+      <h3>3. Seleccionar y editar</h3>
+      <p>Haz clic sobre un componente para seleccionarlo. Con la barra que aparece arriba puedes <strong>⟳ rotar</strong> (<kbd>R</kbd>), abrir sus <strong>⚙ propiedades</strong> (valor, voltaje, color…) o <strong>🗑 eliminarlo</strong> (<kbd>Delete</kbd>).</p>
+      <h3>4. Código Arduino</h3>
+      <p>El botón <strong>{ } CÓDIGO</strong> abre el editor del sketch (<code>setup()</code> / <code>loop()</code>). Puedes anclarlo, dejarlo flotante o minimizarlo con los botones de su cabecera.</p>
+      <h3>5. Simular</h3>
+      <p>Pulsa <strong>▶ INICIAR SIMULACIÓN</strong> para correr el circuito en tiempo real y <strong>⏹ DETENER</strong> para pararlo. El simulador calcula voltajes y corrientes reales: ¡un cortocircuito o una conexión mal hecha puede "quemar" un componente!</p>
+      <h3>6. Guardar y cargar proyectos</h3>
+      <p><strong>💾 GUARDAR PROYECTO</strong> guarda el circuito en tu cuenta; usa el selector <strong>📂 Cargar circuito…</strong> para abrir uno guardado y 🗑 para eliminarlo.</p>
+      <h3>7. Descargar tu trabajo</h3>
+      <p>El botón <strong>⬇ DESCARGAR</strong> ofrece varias formas de exportar el proyecto actual:</p>
+      <ul>
+        <li><strong>📄 Informe en PDF</strong> — resumen listo para entregar: componentes, conexiones y código.</li>
+        <li><strong>🧩 Código (.ino)</strong> — solo el sketch de Arduino, para abrirlo en el IDE.</li>
+        <li><strong>🗂 Proyecto (.json)</strong> — todos los datos del circuito, por si quieres respaldarlo o compartirlo.</li>
+      </ul>
+    </div>
+  </div>
+</div>
 <section id="editor" class="docked">
   <div id="edHead"><span>sketch.ino</span><span>
     <button data-m="dock" title="Anclar">⇥</button><button data-m="float" title="Flotante">❐</button><button data-m="min" title="Minimizar">—</button></span></div>
@@ -47,5 +82,8 @@
 <script src="js/arduino.js"></script>
 <script src="js/editor.js"></script>
 <script src="js/app.js"></script>
+<script src="js/help.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+<script src="js/export.js"></script>
 </body>
 </html>
