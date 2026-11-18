@@ -29,6 +29,8 @@
       <button data-fmt="json">🗂 Proyecto completo (.json)</button>
     </div>
   </div>
+  <button id="btnImport" class="neon green" title="Cargar un proyecto .json desde tu computador">⬆ IMPORTAR</button>
+  <input id="importFile" type="file" accept="application/json,.json" hidden>
   <span class="spacer"></span>
   <span id="userbox"></span>
   <button id="btnOut" class="neon orange">SALIR</button>
@@ -65,6 +67,7 @@
         <li><strong>🧩 Código (.ino)</strong> — solo el sketch de Arduino, para abrirlo en el IDE.</li>
         <li><strong>🗂 Proyecto (.json)</strong> — todos los datos del circuito, por si quieres respaldarlo o compartirlo.</li>
       </ul>
+      <p>Para volver a abrir ese archivo .json (en este computador, en otro, o en el de un compañero), usa <strong>⬆ IMPORTAR</strong>: carga el circuito en el lienzo, y desde ahí puedes guardarlo en tu cuenta con 💾.</p>
     </div>
   </div>
 </div>

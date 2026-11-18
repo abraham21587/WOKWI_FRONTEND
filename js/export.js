@@ -84,4 +84,27 @@
       } catch (e) { Lab.status('❌ ' + e.message); }
     };
   });
+
+  // Importar un proyecto .json descargado antes (en este u otro computador) y cargarlo en el lienzo.
+  const importBtn = $('#btnImport'), importFile = $('#importFile');
+  importBtn.onclick = () => importFile.click();
+  importFile.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = ''; // permite volver a elegir el mismo archivo mas adelante
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!Array.isArray(data.components) || !Array.isArray(data.connections)) {
+          throw new Error('el archivo no tiene el formato de un proyecto de Physics Cyber Lab');
+        }
+        Lab.load(data);
+        Lab.currentId = null; // es una importacion nueva: aun no esta guardada en esta cuenta
+        Lab.status('📂 Proyecto importado — pulsa 💾 Guardar para guardarlo en tu cuenta');
+      } catch (err) { Lab.status('❌ No se pudo importar: ' + err.message); }
+    };
+    reader.onerror = () => Lab.status('❌ No se pudo leer el archivo');
+    reader.readAsText(file);
+  });
 })();
